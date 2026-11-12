@@ -5,10 +5,10 @@ const loader = document.querySelector('[data-testid="loader"]');
 const empty = document.querySelector('[data-testid="empty"]');
 const notice = document.querySelector('#notice');
 const refreshNotice = document.querySelector('#refresh-notice');
+const confirmDialog = document.querySelector('[data-testid="confirm"]');
+const confirmIncident = document.querySelector('#confirm-incident');
 const incidents = new Map();
 const rows = new Map();
-const acknowledged = new Set();
-const pending = new Set();
 
 const locale = navigator.language;
 const region = new Intl.Locale(locale).maximize().region;
@@ -22,6 +22,7 @@ const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digi
 let queue = Promise.resolve();
 let loaded = false;
 let refreshing = false;
+let selectedId = null;
 
 // Serialize network actions so that an Ack uses the cursor from the last completed poll.
 function enqueue(action) {
@@ -35,34 +36,42 @@ function makeRow(id) {
   const button = row.querySelector('button');
   button.setAttribute('aria-label', `Ack ${id}`);
   button.addEventListener('click', () => {
-    if (pending.has(id) || acknowledged.has(id)) return;
-    pending.add(id);
-    updateAck(id);
-    enqueue(async () => {
-      try {
-        await ack(id);
-        acknowledged.add(id);
-        notice.textContent = '';
-      } catch {
-        notice.textContent = `Couldn’t acknowledge ${id}. Try again.`;
-      } finally {
-        pending.delete(id);
-        updateAck(id);
-      }
-    });
+    if (selectedId !== null || button.getAttribute('aria-disabled') === 'true') return;
+    selectedId = id;
+    confirmIncident.textContent = id;
+    confirmDialog.returnValue = '';
+    confirmDialog.showModal();
   });
   rows.set(id, row);
   return row;
 }
 
-function updateAck(id) {
-  const row = rows.get(id);
-  const button = row.querySelector('button');
-  button.disabled = pending.has(id);
-  button.hidden = acknowledged.has(id);
-  button.textContent = pending.has(id) ? 'Acking…' : 'Ack';
-  row.querySelector('[data-testid="acked"]').hidden = !acknowledged.has(id);
-}
+confirmDialog.addEventListener('close', () => {
+  const id = selectedId;
+  selectedId = null;
+  if (id === null || confirmDialog.returnValue !== 'ack') return;
+
+  const button = rows.get(id).querySelector('[data-testid="ack"]');
+  button.setAttribute('aria-disabled', 'true');
+  button.textContent = 'Acking…';
+  enqueue(async () => {
+    try {
+      await ack(id);
+      notice.textContent = '';
+      const mark = document.createElement('span');
+      mark.dataset.testid = 'acked';
+      mark.tabIndex = -1;
+      mark.textContent = 'Acked';
+      const hadFocus = document.activeElement === button;
+      button.replaceWith(mark);
+      if (hadFocus) mark.focus({ preventScroll: true });
+    } catch {
+      notice.textContent = `Couldn’t acknowledge ${id}. Try again.`;
+      button.removeAttribute('aria-disabled');
+      button.textContent = 'Ack';
+    }
+  });
+});
 
 function render(changes) {
   for (const incident of changes) {

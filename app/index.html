@@ -26,9 +26,17 @@
           <span class="what"></span>
           <time></time>
           <button type="button" data-testid="ack">Ack</button>
-          <span data-testid="acked" hidden>Acked</span>
         </li>
       </template>
+      <dialog data-testid="confirm" aria-labelledby="confirm-title">
+        <form method="dialog">
+          <h2 id="confirm-title">Acknowledge <span id="confirm-incident"></span>?</h2>
+          <div class="confirm-actions">
+            <button value="cancel" data-testid="confirm-cancel" autofocus>Cancel</button>
+            <button value="ack" data-testid="confirm-ack">Confirm Ack</button>
+          </div>
+        </form>
+      </dialog>
     </main>
     <footer>sched-prod incident board · Build <code data-testid="build-sha">BUILD_SHA</code></footer>
   </body>
