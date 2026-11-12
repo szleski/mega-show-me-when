@@ -1,0 +1,45 @@
+name: Publish incident board
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/configure-pages@v5
+      - name: Configure this challenge build
+        env:
+          MEGA_SESSION: ${{ secrets.MEGA_SESSION }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          session = os.environ["MEGA_SESSION"]
+          if not session:
+              raise SystemExit("Configure MEGA_SESSION before deploying.")
+          config = Path("app/config.js")
+          api = "https://hq.mega.dev/challenges/show-me-when/api"
+          config.write_text(f"export const API = {json.dumps(api)};\n"
+                            f"export const SESSION = {json.dumps(session)};\n")
+          index = Path("app/index.html")
+          index.write_text(index.read_text().replace("BUILD_SHA", os.environ["GITHUB_SHA"]))
+          PY
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: app
+      - id: publish
+        uses: actions/deploy-pages@v4
